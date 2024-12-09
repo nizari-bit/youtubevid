@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Display Uploaded Videos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Dark Mode Styles */
+        body.dark-mode {
+            background-color: #121212;
+            color: #ffffff;
+        }
+
+        .dark-mode .video-card {
+            background-color: #333;
+        }
+
+        .video-card {
+            background-color: #fff;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            transition: background-color 0.3s;
+            width: 100%;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .video-card iframe {
+            width: 100%;
+            height: 200px;
+            border-radius: 10px;
+        }
+
+        .video-card .video-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .video-card .video-uploader,
+        .video-card .video-timestamp,
+        .like-count,
+        .dislike-count {
+            font-size: 0.9rem;
+            color: #777;
+            margin-top: 5px;
+        }
+
+        .video-card .video-description {
+            font-size: 1rem;
+            margin: 10px 0;
+        }
+
+        .video-card .like-dislike-btn {
+            margin-right: 10px;
+            margin-left: 5px;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+
+        .pagination .page-item.active .page-link {
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+
+        .floating-video-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 50%;
+            font-size: 16px;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            z-index: 100;
+        }
+
+        .floating-video-button:hover {
+            background-color: #0056b3;
+        }
+
+        /* Responsive Grid Layout */
+        #videoContainer {
+            display: grid;
+            grid-gap: 20px;
+            padding-left: 0;
+            align-items: center;
+            grid-template-columns: repeat(4, 1fr);
+            margin-top: 20px;
+        }
+
+        /* Pagination Styles */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .pagination .page-item a {
+            color: #007bff;
+        }
+
+        /* Center search bar and category filter */
+        .search-bar,
+        .category-filter {
+            margin-left: auto;
+            margin-right: auto;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .category-filter select,
+        .search-bar input {
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1 class="text-center text-primary mb-4">Uploaded Videos</h1>
+
+        <div class="text-center mb-4">
+            <button id="darkModeToggle" class="btn btn-secondary">Toggle Dark Mode</button>
+        </div>
+
+        <div class="mb-4 search-bar">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search videos..."
+                onkeyup="searchVideos()">
+        </div>
+
+        <div class="category-filter text-center mb-4">
+            <select id="categoryFilter" class="form-control" onchange="filterByCategory()">
+                <option value="">All Categories</option>
+                <option value="Education">Education</option>
+                <option value="Music">Music</option>
+                <option value="Comedy">Comedy</option>
+                <option value="Tech">Tech</option>
+            </select>
+        </div>
+
+        <div id="videoContainer" class="row"></div>
+
+        <nav>
+            <ul class="pagination" id="pagination"></ul>
+        </nav>
+
+        <div class="text-center">
+            <a href="/upload" class="btn btn-primary btn-custom">Go to Upload Page</a>
+        </div>
+
+        <div class="comments-section">
+            <h5>Comments</h5>
+            <div id="commentsList"></div>
+            <input type="text" id="commentInput" class="form-control" placeholder="Add a comment..." />
+            <button class="btn btn-primary mt-2" onclick="addComment()">Post Comment</button>
+        </div>
+
+        <button class="floating-video-button" onclick="toggleCommentSection()">Add Comment</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentPage = 1;
+        const videosPerPage = 6;
+        let allVideos = []; // Store all videos for searching and filtering
+
+        // Load Videos Function
+        async function loadVideos(page = 1, category = '', searchQuery = '') {
+            currentPage = page;
+
+            // Fetch videos data from the server, filtering by category and search query
+            const response = await fetch(`/videos?page=${page}&category=${category}&search=${searchQuery}`);
+            const data = await response.json();
+
+            // Update local state of all videos for searching
+            if (page === 1) {
+                allVideos = data.videos;
+                saveVideosToLocalStorage(allVideos); // Save videos to local storage
+            }
+
+            displayVideos(data);
+        }
+
+        // Save videos to local storage
+        function saveVideosToLocalStorage(videos) {
+            localStorage.setItem('videos', JSON.stringify(videos));
+        }
+
+        // Display Videos
+        function displayVideos(data) {
+            const videoContainer = document.getElementById('videoContainer');
+            const pagination = document.getElementById('pagination');
+            videoContainer.innerHTML = '';
+            pagination.innerHTML = '';
+
+            data.videos.forEach((video) => {
+                const col = document.createElement('div');
+                col.className = 'col-md-3 video-card'; // Adjusted for 4 items per row
+
+                const iframe = document.createElement('iframe');
+                iframe.src = `https://www.youtube.com/embed/${video.id}`;
+                iframe.className = 'video-thumbnail';
+                iframe.allowFullscreen = true;
+
+                const title = document.createElement('div');
+                title.className = 'video-title';
+                title.textContent = video.title;
+
+                const uploader = document.createElement('div');
+                uploader.className = 'video-uploader';
+                uploader.textContent = `Uploaded by: ${video.uploader}`;
+
+                const description = document.createElement('div');
+                description.className = 'video-description';
+                description.textContent = video.description;
+
+                const timestamp = document.createElement('div');
+                timestamp.className = 'video-timestamp';
+                timestamp.textContent = new Date(video.timestamp).toLocaleString();
+
+                const likeButton = document.createElement('button');
+                likeButton.className = 'like-dislike-btn btn btn-sm btn-outline-success';
+                likeButton.innerHTML = '<i class="fas fa-thumbs-up"></i>'; // Thumbs up icon
+                likeButton.onclick = () => updateLikeDislike(video.id, 'like');
+
+                const dislikeButton = document.createElement('button');
+                dislikeButton.className = 'like-dislike-btn btn btn-sm btn-outline-danger';
+                dislikeButton.innerHTML = '<i class="fas fa-thumbs-down"></i>'; // Thumbs down icon
+                dislikeButton.onclick = () => updateLikeDislike(video.id, 'dislike');
+
+                const likeCount = document.createElement('span');
+                likeCount.className = 'like-count';
+                likeCount.textContent = `Likes: ${getLikeDislikeCount(video.id, 'like')}`;
+
+                const dislikeCount = document.createElement('span');
+                dislikeCount.className = 'dislike-count';
+                dislikeCount.textContent = `Dislikes: ${getLikeDislikeCount(video.id, 'dislike')}`;
+
+                col.appendChild(iframe);
+                col.appendChild(title);
+                col.appendChild(uploader);
+                col.appendChild(description);
+                col.appendChild(timestamp);
+                col.appendChild(likeButton);
+                col.appendChild(likeCount);
+                col.appendChild(dislikeButton);
+                col.appendChild(dislikeCount);
+                videoContainer.appendChild(col);
+            });
+
+            // Pagination logic
+            const totalPages = Math.ceil(data.total / videosPerPage);
+            for (let i = 1; i <= totalPages; i++) {
+                const pageItem = document.createElement('li');
+                pageItem.className = 'page-item';
+                const pageLink = document.createElement('a');
+                pageLink.className = 'page-link';
+                pageLink.textContent = i;
+                pageLink.onclick = () => loadVideos(i);
+                pageItem.appendChild(pageLink);
+                pagination.appendChild(pageItem);
+            }
+        }
+
+        // Update Like/Dislike Status
+        async function updateLikeDislike(videoId, type) {
+            await fetch(`/update-like-dislike?videoId=${videoId}&type=${type}`, {
+                method: 'POST',
+            });
+            loadVideos(currentPage);
+            saveLikeDislikeCountsToLocalStorage(); // Save counts after update
+        }
+
+        // Save like/dislike counts to local storage
+        function saveLikeDislikeCountsToLocalStorage() {
+            const counts = allVideos.map(video => ({
+                id: video.id,
+                likeCount: video.likeCount,
+                dislikeCount: video.dislikeCount
+            }));
+            localStorage.setItem('likeDislikeCounts', JSON.stringify(counts));
+        }
+
+        // Get Like/Dislike Count
+        function getLikeDislikeCount(videoId, type) {
+            const video = allVideos.find(v => v.id === videoId);
+            return video ? video[type + 'Count'] : 0;
+        }
+
+        // Search Videos
+        function searchVideos() {
+            const searchQuery = document.getElementById('searchInput').value;
+            loadVideos(1, '', searchQuery);
+        }
+
+        // Filter by Category
+        function filterByCategory() {
+            const category = document.getElementById('categoryFilter').value;
+            loadVideos(1, category);
+        }
+
+        // Dark Mode Toggle
+        document.getElementById('darkModeToggle').addEventListener('click', function () {
+            document.body.classList.toggle('dark-mode');
+            saveThemeToLocalStorage(document.body.classList.contains('dark-mode') ? 'dark-mode' : '');
+        });
+
+        // Save theme to local storage
+        function saveThemeToLocalStorage(theme) {
+            localStorage.setItem('theme', theme);
+        }
+
+        // Load theme from local storage
+        function loadThemeFromLocalStorage() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                document.body.classList.add(savedTheme);
+            }
+        }
+
+        // Toggle Comment Section
+        function toggleCommentSection() {
+            const commentSection = document.querySelector('.comments-section');
+            commentSection.style.display = commentSection.style.display === 'block' ? 'none' : 'block';
+        }
+
+        // Add Comment
+        function addComment() {
+            const commentInput = document.getElementById('commentInput');
+            const comment = commentInput.value;
+            if (comment.trim()) {
+                const commentList = document.getElementById('commentsList');
+                const commentElement = document.createElement('div');
+                commentElement.className = 'comment';
+                commentElement.textContent = comment;
+                commentList.appendChild(commentElement);
+                commentInput.value = '';
+            }
+        }
+
+        // Initial load
+        loadThemeFromLocalStorage();
+        loadVideos(1);
+    </script>
+</body>
+
+</html>
